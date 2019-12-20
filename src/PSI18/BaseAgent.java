@@ -17,7 +17,7 @@ public abstract class BaseAgent extends Agent {
     private int myId;
     private int[] opponentsIds;
     private ACLMessage msg;
-    private String agentName = "Agent";
+    private MainAgent.GameParametersStruct parameters = new MainAgent.GameParametersStruct();
 
     protected void setup() {
         state = State.s0_Configuring;
@@ -36,8 +36,7 @@ public abstract class BaseAgent extends Agent {
         }
         addBehaviour(new Play());
         //Set the agent name
-        this.agentName = "Base Agent";
-        System.out.println(agentName + " " + getAID().getName() + " is ready.");
+        System.out.println("Agent" + " " + getAID().getName() + " is ready.");
 
     }
 
@@ -56,9 +55,10 @@ public abstract class BaseAgent extends Agent {
     }
 
     private class Play extends CyclicBehaviour {
-        Random random = new Random(1000);
+
         @Override
         public void action() {
+            BaseAgent agent = ((BaseAgent) this.getAgent());
             System.out.println(getAID().getName() + ":" + state.name());
             msg = receive();
             if (msg != null) {
@@ -71,7 +71,8 @@ public abstract class BaseAgent extends Agent {
                         if (msg.getContent().startsWith("Id#") && msg.getPerformative() == ACLMessage.INFORM) {
                             boolean parametersUpdated = false;
                             try {
-                                parametersUpdated = validateSetupMessage(msg);
+                                parametersUpdated = parseSetupMessage(msg);
+                                agent.mainAgent = msg.getSender();
                             } catch (NumberFormatException e) {
                                 System.out.println(getAID().getName() + ":" + state.name() + " - Bad message");
                             }
@@ -86,59 +87,47 @@ public abstract class BaseAgent extends Agent {
                         //If INFORM Id#_#_,_,_,_ PROCESS SETUP --> stay at s1
                         //Else ERROR
                         //TODO I probably should check if the new game message comes from the main agent who sent the parameters
+                        boolean parametersUpdated = false;
                         if (msg.getPerformative() == ACLMessage.INFORM) {
                             if (msg.getContent().startsWith("Id#")) { //Game settings updated
                                 try {
-                                    validateSetupMessage(msg);
+                                    parseSetupMessage(msg);
+                                    parametersUpdated = true;
                                 } catch (NumberFormatException e) {
                                     System.out.println(getAID().getName() + ":" + state.name() + " - Bad message");
                                 }
-                            } else if (msg.getContent().startsWith("NewGame#")) {
-                                boolean gameStarted = false;
-                                try {
-                                    gameStarted = validateNewGame(msg.getContent());
-                                } catch (NumberFormatException e) {
-                                    System.out.println(getAID().getName() + ":" + state.name() + " - Bad message");
-                                }
-                                if (gameStarted) state = State.s2_InRound;
+                            } else if (msg.getContent().startsWith("NewGame")) {
+                                state = State.s2_InRound;
                             }
                         } else {
                             System.out.println(getAID().getName() + ":" + state.name() + " - Unexpected message");
                         }
                         break;
                     case s2_InRound:
-                        //If REQUEST POSITION --> INFORM POSITION --> go to state 3
-                        //If INFORM CHANGED stay at state 2
-                        //If INFORM ENDGAME go to state 1
-                        //Else error
-                        if (msg.getPerformative() == ACLMessage.REQUEST /*&& msg.getContent().startsWith("Position")*/) {
+                        if (msg.getPerformative() == ACLMessage.REQUEST && msg.getContent().startsWith("Action")) {
                             ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
                             msg.addReceiver(mainAgent);
-                            msg.setContent("Position#" + random.nextInt());
+                            agent.parameters.currentRound = agent.parameters.currentRound + 1;
+                            msg.setContent("Action#" + playRound(agent.parameters.currentRound));
                             System.out.println(getAID().getName() + " sent " + msg.getContent());
                             send(msg);
                             state = State.s3_AwaitingResult;
-                        } else if (msg.getPerformative() == ACLMessage.INFORM && msg.getContent().startsWith("Changed#")) {
-                            // Process changed message, in this case nothing
-                        } else if (msg.getPerformative() == ACLMessage.INFORM && msg.getContent().startsWith("EndGame")) {
+                        } else if(msg.getContent().startsWith("GameOver")){
                             state = State.s1_AwaitingGame;
                         } else {
                             System.out.println(getAID().getName() + ":" + state.name() + " - Unexpected message:" + msg.getContent());
                         }
                         break;
                     case s3_AwaitingResult:
-                        //If INFORM RESULTS --> go to state 2
-                        //Else error
                         if (msg.getPerformative() == ACLMessage.INFORM && msg.getContent().startsWith("Results#")) {
-                            //Process results
+                            System.out.println(getAID().getName() + ":" + state.name() + " " +  msg.getContent());
                             state = State.s2_InRound;
                         } else {
                             System.out.println(getAID().getName() + ":" + state.name() + " - Unexpected message");
                         }
                         break;
                 }
-            }
-            else block();
+            } else block();
         }
 
         /**
@@ -147,17 +136,32 @@ public abstract class BaseAgent extends Agent {
          * @param msg ACLMessage to process
          * @return true on success, false on failure
          */
-        private boolean validateSetupMessage(ACLMessage msg) throws NumberFormatException {
+        private boolean parseSetupMessage(ACLMessage msg) throws NumberFormatException {
+            BaseAgent agent = ((BaseAgent) this.getAgent());
+            String[] parts = msg.getContent().split("#");
+            agent.myId = Integer.parseInt(parts[1]);
+            parts = parts[2].split(",");
+            if (parts.length != 5) throw new NumberFormatException();
+            for (int i = 0; i < parts.length; i++) {
+                switch (i) {
+                    case 0:
+                        agent.parameters.N = Integer.parseInt(parts[0]);
+                        break;
+                    case 1:
+                        agent.parameters.E = Integer.parseInt(parts[1]);
+                        break;
+                    case 2:
+                        agent.parameters.R = Integer.parseInt(parts[2]);
+                        break;
+                    case 3:
+                        agent.parameters.Pd = Float.parseFloat(parts[3]);
+                        break;
+                    case 4:
+                        agent.parameters.numGames = Integer.parseInt(parts[4]);
+                        break;
+                }
+            }
             return true;
-        }
-
-        /**
-         * Processes the contents of the New Game message
-         * @param msgContent Content of the message
-         * @return true if the message is valid
-         */
-        public boolean validateNewGame(String msgContent) {
-            return false;
         }
     }
 
@@ -165,5 +169,5 @@ public abstract class BaseAgent extends Agent {
      * Agents need to implement this method in order to make decisions along the rounds
       * @return An integer with the desired decision (between 0 and 4)
      */
-    public abstract int playRound();
+    public abstract int playRound(int round);
 }

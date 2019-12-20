@@ -1,6 +1,6 @@
 package PSI18;
 
-import jdk.jfr.Event;
+import jade.core.AID;
 
 import java.awt.*;
 import java.awt.event.*;
@@ -10,11 +10,13 @@ import javax.swing.border.Border;
 public class PSI18_GUI extends JFrame implements ActionListener {
 
     private JLabel label;
-    JTextArea textArea;
+    JTextArea console;
     private boolean verbose = true;
     public GameInfo gameInfo;
+    private JPanel players = new JPanel();
+    private int nOfPlayers = 0;
 
-    PSI18_GUI() {
+    public PSI18_GUI() {
         super("Collective-Risk Dilemma Game (PSI 18)");
         this.setBackground(Color.lightGray);
         this.setForeground(Color.black);
@@ -75,36 +77,45 @@ public class PSI18_GUI extends JFrame implements ActionListener {
 
         this.setJMenuBar(menuBar);
         this.setLayout(new GridLayout(1,3));
-        JPanel players = new JPanel();
-        players.setLayout(new GridLayout(5,1, 5,5));
-        Player player1 = new Player(1, 40);
-        Player player2 = new Player(2, 40);
-        Player player3 = new Player(3, 40);
-        Player player4 = new Player(4, 40);
-        Player player5 = new Player(5, 40);
-        players.add(player1.getPlayerPanel(),0,0);
-        players.add(player2.getPlayerPanel(),0,1);
-        players.add(player3.getPlayerPanel(),0,2);
-        players.add(player4.getPlayerPanel(),0,3);
-        players.add(player5.getPlayerPanel(),0,4);
+        resetPlayers();
         this.add(players);
         GameInfo gameInfoFrame = new GameInfo();
         this.gameInfo = gameInfoFrame;
         this.add(gameInfoFrame.getPanel());
-        this.textArea = new JTextArea(1, 1);
-        JScrollPane scroll = new JScrollPane (textArea,
+        this.console = new JTextArea(1, 1);
+        JScrollPane scroll = new JScrollPane (console,
                 JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         this.add(scroll);
         scroll.setAutoscrolls(true);
         scroll.setFocusCycleRoot(true);
-        textArea.setEditable(false);
-        textArea.setFocusCycleRoot(true);
-        textArea.setAutoscrolls(true);
+        console.setEditable(false);
+        console.setFocusCycleRoot(true);
+        console.setAutoscrolls(true);
         this.setSize (new Dimension(1000,800));     // Window size
         this.setLocation (new Point (100, 100));
         this.setVisible(true);
-        player1.contribute(1);
         return;
+    }
+
+    public void consoleLog(String message){
+        this.console.append(message + "\n");
+        return;
+    }
+
+    public Player addPlayer(int playerID, int remainingBudget, AID aid) {
+        if(nOfPlayers == 5){
+            //throw new Exception("Cant add more players");
+        }
+        Player newPlayer = new Player(playerID, remainingBudget, aid);
+        players.add(newPlayer.getPlayerPanel(), nOfPlayers, nOfPlayers );
+        nOfPlayers++;
+        return newPlayer;
+    }
+
+    public void resetPlayers() {
+        players.removeAll();
+        players.setLayout(new GridLayout(5,1, 5,5));
+        nOfPlayers = 0;
     }
 
     public void actionPerformed (ActionEvent evt) {
@@ -112,18 +123,18 @@ public class PSI18_GUI extends JFrame implements ActionListener {
         if(event.contains("Verbose")) {
             this.verbose = !this.verbose;
             if (!this.verbose) {
-                this.textArea.append("[SYSTEM]: Verbose Off, I'll stay quiet\n");
+                this.console.append("[SYSTEM]: Verbose Off, I'll stay quiet\n");
             } else {
-                this.textArea.append("[SYSTEM]: Verbose On!\n");
+                this.console.append("[SYSTEM]: Verbose On!\n");
             }
             return;
         }
         if(!this.verbose) return;
-        this.textArea.append("[USER ACTION]: Selected *" + event + "* option\n");
+        this.console.append("[USER ACTION]: Selected *" + event + "* option\n");
         if(event.contains("Remove Player")){
-            this.textArea.append("[SYSTEM]: But removing players is not implemented\n");
-            this.textArea.append("[" + event.split(" ")[1] + " " + event.split(" ")[2] + "]: I'm indestructible!\n");
-            this.textArea.append("[SYSTEM]: Just for now...\n");
+            this.console.append("[SYSTEM]: But removing players is not implemented\n");
+            this.console.append("[" + event.split(" ")[1] + " " + event.split(" ")[2] + "]: I'm indestructible!\n");
+            this.console.append("[SYSTEM]: Just for now...\n");
             return;
         }
         switch(event) {
@@ -134,15 +145,11 @@ public class PSI18_GUI extends JFrame implements ActionListener {
                 new MyDialog(this, "Disaster probability", true, this);
                 break;
             case "About":
-                this.textArea.append("\nCollective-Risk Dilemma Game (PSI 18)\n\n");
-                this.textArea.append("Author: Amancio Pontes Hermo\n");
-                this.textArea.append("Version: 0.1 (interface only)\n");
-                this.textArea.append("Contact: amancio001@gmail.com\n\n");
+                this.console.append("\nCollective-Risk Dilemma Game (PSI 18)\n\n");
+                this.console.append("Author: Amancio Pontes Hermo\n");
+                this.console.append("Version: 0.1 (interface only)\n");
+                this.console.append("Contact: amancio001@gmail.com\n\n");
         }
-    }
-
-    public static void main (String[] args) {
-        PSI18_GUI gui = new PSI18_GUI();
     }
 
     public class GameInfo {
@@ -249,18 +256,22 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             this.gamesToPlayLabel.setText("Games to play: " + this.gamesToPlay);
         }
     }
+
     public class Player {
+
         JPanel playerPanel;
         final int playerID;
+        AID aid;
         int remainigBudget;
         JLabel label1;
         JLabel label2;
         JLabel label3;
 
-
-        Player (int playerId, int remainigBudget) {
+        Player (int playerId, int remainigBudget, AID aid) {
             this.playerID = playerId;
+
             this.remainigBudget = remainigBudget;
+            this.aid = aid;
 
             this.playerPanel = new JPanel();
             Border blackline = BorderFactory.createLineBorder(Color.black);

@@ -9,8 +9,8 @@ public class RandomAgent extends BaseAgent {
     }
 
     @Override
-    public int playRound() {
+    public int playRound(int currentRound) {
         Random random = new Random();
-        return (random.nextInt(3) + 1);
+        return (random.nextInt(4));
     }
 }
