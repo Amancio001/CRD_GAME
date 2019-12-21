@@ -1,4 +1,3 @@
-package PSI18;
 
 import jade.core.AID;
 
@@ -182,7 +181,7 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             case "About":
                 this.console.append("\nCollective-Risk Dilemma Game (PSI 18)\n\n");
                 this.console.append("Author: Amancio Pontes Hermo\n");
-                this.console.append("Version: 0.1 (interface only)\n");
+                this.console.append("Version: 1.0)\n");
                 this.console.append("Contact: amancio001@gmail.com\n\n");
                 break;
             case "Reset Players":

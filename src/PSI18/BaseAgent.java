@@ -13,16 +13,15 @@ public abstract class BaseAgent extends Agent {
     private State state;
     private AID mainAgent;
     private ACLMessage msg;
+    private GameParametersStruct parameters = new GameParametersStruct();
 
-    public MainAgent.GameParametersStruct getParameters() {
+    public GameParametersStruct getParameters() {
         return parameters;
     }
 
-    public void setParameters(MainAgent.GameParametersStruct parameters) {
+    public void setParameters(GameParametersStruct parameters) {
         this.parameters = parameters;
     }
-
-    private MainAgent.GameParametersStruct parameters = new MainAgent.GameParametersStruct();
 
     protected void setup() {
         state = State.s0_Configuring;
@@ -84,7 +83,7 @@ public abstract class BaseAgent extends Agent {
                             }
                             if (parametersUpdated){
                                 state = State.s1_AwaitingGame;
-                                onConfigurated();
+                                onConfigured();
                             }
                         } else {
                             System.out.println(getAID().getName() + ":" + state.name() + " - Unexpected message");
@@ -167,6 +166,27 @@ public abstract class BaseAgent extends Agent {
             return true;
         }
     }
+
+    public class GameParametersStruct {
+
+        int N;
+        int E;
+        int R;
+        float Pd;
+        int numGames;
+        int currentRound;
+        int initialBudget = 40;
+
+        public GameParametersStruct() {
+            N = 5;
+            E = initialBudget;
+            R = 10;
+            Pd = 0.2f;
+            numGames = 10;
+            currentRound = 0;
+        }
+    }
+
     /******** AGENT METHODS TO IMPLEMENT *******************/
 
     /**
@@ -181,7 +201,7 @@ public abstract class BaseAgent extends Agent {
      * Agents may override the following methods in order to do extra actions on certain events
      */
 
-    public void onConfigurated(){}
+    public void onConfigured(){}
     public void onResult(String result){}
     public void onRoundFinished(){}
 

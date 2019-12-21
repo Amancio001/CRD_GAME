@@ -1,5 +1,3 @@
-package PSI18;
-
 import jade.core.AID;
 import jade.core.Agent;
 import jade.core.behaviours.*;
@@ -185,8 +183,7 @@ public class MainAgent extends Agent {
         }
     }
 
-
-    public static class GameParametersStruct {
+    public class GameParametersStruct {
 
         int N;
         int E;
