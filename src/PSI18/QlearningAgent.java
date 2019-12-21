@@ -3,6 +3,14 @@ package PSI18;
 import java.util.ArrayList;
 import java.util.Random;
 
+/**
+ * Q Learning Agent
+ *
+ * Based on tutorial and code provided in:
+ * http://technobium.com/reinforcement-learning-q-learning-java/
+ *
+ */
+
 public class QlearningAgent extends BaseAgent {
     private final double alpha = 0.1; // Learning rate
     private final double gamma = 0.9; // Eagerness - 0 looks in the near future, 1 looks in the distant future
