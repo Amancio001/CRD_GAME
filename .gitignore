@@ -1,5 +1,6 @@
 jade
 out
 .idea
-.class
+*.class
+src/*.txt
 
