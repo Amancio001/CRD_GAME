@@ -4,6 +4,9 @@ import jade.core.AID;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.TreeMap;
 import javax.swing.*;
 import javax.swing.border.Border;
 
@@ -11,27 +14,26 @@ public class PSI18_GUI extends JFrame implements ActionListener {
 
     private JLabel label;
     JTextArea console;
+    JScrollPane scroll;
     private boolean verbose = true;
-    public GameInfo gameInfo;
+    public static GameInfo gameInfo;
     private JPanel players = new JPanel();
+    private JMenuItem removePlayersItem;
     private int nOfPlayers = 0;
-
-    public PSI18_GUI() {
+    private MainAgent mainAgent;
+    public PSI18_GUI(MainAgent mainAgent) {
         super("Collective-Risk Dilemma Game (PSI 18)");
+        this.mainAgent = mainAgent;
         this.setBackground(Color.lightGray);
         this.setForeground(Color.black);
 
         JMenu editMenu = new JMenu( "Edit");
             JMenuItem itemResetPlayers = new JMenuItem("Reset Players");
             JMenuItem itemRemPlayer    = new JMenu("Remove player");
+            removePlayersItem = itemRemPlayer;
             editMenu.add(itemResetPlayers);
             editMenu.add(itemRemPlayer);
 
-            for(int i = 1; i <=7; i++){
-                JMenuItem itemPlayer = new JMenuItem("Remove Player " + i);
-                itemRemPlayer.add(itemPlayer);
-                itemPlayer.addActionListener(this);
-            }
             itemResetPlayers.addActionListener(this);
             itemRemPlayer.addActionListener(this);
 
@@ -83,14 +85,14 @@ public class PSI18_GUI extends JFrame implements ActionListener {
         this.gameInfo = gameInfoFrame;
         this.add(gameInfoFrame.getPanel());
         this.console = new JTextArea(1, 1);
-        JScrollPane scroll = new JScrollPane (console,
+        scroll = new JScrollPane (console,
                 JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        this.add(scroll);
-        scroll.setAutoscrolls(true);
+        scroll.getVerticalScrollBar().setAutoscrolls(true);
         scroll.setFocusCycleRoot(true);
         console.setEditable(false);
         console.setFocusCycleRoot(true);
         console.setAutoscrolls(true);
+        this.add(scroll);
         this.setSize (new Dimension(1000,800));     // Window size
         this.setLocation (new Point (100, 100));
         this.setVisible(true);
@@ -98,13 +100,17 @@ public class PSI18_GUI extends JFrame implements ActionListener {
     }
 
     public void consoleLog(String message){
+        if(!this.verbose) return;
         this.console.append(message + "\n");
+        console.setCaretPosition(console.getDocument().getLength());
+//        JScrollBar vertical = scroll.getVerticalScrollBar();
+//        scroll.setVerticalScrollBarPolicy(JScrollPane.);
         return;
     }
 
-    public Player addPlayer(int playerID, int remainingBudget, AID aid) {
+    public Player addPlayer(int playerID, int remainingBudget, AID aid) throws Exception{
         if(nOfPlayers == 5){
-            //throw new Exception("Cant add more players");
+            throw new Exception("Cant add more players");
         }
         Player newPlayer = new Player(playerID, remainingBudget, aid);
         players.add(newPlayer.getPlayerPanel(), nOfPlayers, nOfPlayers );
@@ -116,6 +122,19 @@ public class PSI18_GUI extends JFrame implements ActionListener {
         players.removeAll();
         players.setLayout(new GridLayout(5,1, 5,5));
         nOfPlayers = 0;
+    }
+
+    public void updatePlayerRemover(){
+        this.removePlayersItem.removeAll();
+        Iterator<PSI18_GUI.Player> players = mainAgent.getPlayers().iterator();
+        int i = 0;
+        while (players.hasNext()){
+            JMenuItem itemPlayer = new JMenuItem("Remove Player " + i);
+            itemPlayer.addActionListener(this);
+            this.removePlayersItem.add(itemPlayer);
+            players.next();
+            i++;
+        }
     }
 
     public void actionPerformed (ActionEvent evt) {
@@ -132,10 +151,10 @@ public class PSI18_GUI extends JFrame implements ActionListener {
         if(!this.verbose) return;
         this.console.append("[USER ACTION]: Selected *" + event + "* option\n");
         if(event.contains("Remove Player")){
-            this.console.append("[SYSTEM]: But removing players is not implemented\n");
-            this.console.append("[" + event.split(" ")[1] + " " + event.split(" ")[2] + "]: I'm indestructible!\n");
-            this.console.append("[SYSTEM]: Just for now...\n");
-            return;
+            int index = Integer.parseInt(event.split(" ")[2]);
+            mainAgent.getPlayers().remove(mainAgent.getPlayers().get(index));
+            players.remove(index);
+            this.revalidate();
         }
         switch(event) {
             case "Number of games":
@@ -149,18 +168,24 @@ public class PSI18_GUI extends JFrame implements ActionListener {
                 this.console.append("Author: Amancio Pontes Hermo\n");
                 this.console.append("Version: 0.1 (interface only)\n");
                 this.console.append("Contact: amancio001@gmail.com\n\n");
+                break;
+            case "Reset Players":
+                mainAgent.updatePlayers();
+                break;
+            case "New":
+                mainAgent.newGame();
         }
     }
 
     public class GameInfo {
 
-        int players = 7;
+        int players = 0;
         int round = 0;
         int gamesPlayed = 0;
-        int gamesToPlay = 0;
-        float threshold = 0;
+        int gamesToPlay = 10;
+        int threshold = 0;
         float disasterProbability = 0.8f;
-        float uncertaintyParameter = 0.25f;
+        boolean disasterInThisRound = false;
 
         public void setGamesToPlay(int gamesToPlay) {
             this.gamesToPlay = gamesToPlay;
@@ -182,7 +207,7 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             this.updateUI();
         }
 
-        public void setThreshold(float threshold) {
+        public void setThreshold(int threshold) {
             this.threshold = threshold;
             this.updateUI();
         }
@@ -192,9 +217,38 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             this.updateUI();
         }
 
-        public void setUncertaintyParameter(float uncertaintyParameter) {
-            this.uncertaintyParameter = uncertaintyParameter;
-            this.updateUI();
+
+        /**
+         * Sets one round as played
+         * @return false if all rounds where played, true otherwise
+         */
+        public boolean playRound(){
+            if(gamesToPlay == 0){
+                setGamesToPlay(gamesPlayed);
+                setGamesPlayed(0);
+                return false;
+            }
+            setGamesToPlay(gamesToPlay - 1);
+            setGamesPlayed(gamesPlayed + 1);
+            setThreshold((mainAgent.getPlayers().size() * mainAgent.parameters.initialBudget) / 2);
+            //disaster is pre-calculated at the start of each round
+            double f = Math.random();
+            this.disasterInThisRound = f <= disasterProbability;
+            consoleLog("");
+            consoleLog("[ROUND " + gamesPlayed + "] ");
+            return true;
+        }
+
+        public void checkDisaster(int contributions){
+            consoleLog("Players contributed " + contributions + " / " +  gameInfo.threshold);
+            if(contributions < gameInfo.threshold) {
+                consoleLog("Unreached threshold in round " + gameInfo.gamesPlayed);
+                if (!gameInfo.disasterInThisRound) {
+                    consoleLog("But the disaster DID NOT happened!");
+                } else {
+                    consoleLog("And a disaster happened!");
+                }
+            } else consoleLog("Threshold reached in round " + gameInfo.gamesPlayed + "!");
         }
 
 
@@ -204,7 +258,6 @@ public class PSI18_GUI extends JFrame implements ActionListener {
         JLabel gamesPlayedLabel;
         JLabel thresholdLabel;
         JLabel disasterProbabilityLabel;
-        JLabel uncertaintyParameterLabel;
         JLabel gamesToPlayLabel;
 
         public JPanel getPanel() {
@@ -225,14 +278,12 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             this.gamesPlayedLabel = new JLabel();
             this.thresholdLabel = new JLabel();
             this.disasterProbabilityLabel = new JLabel();
-            this.uncertaintyParameterLabel = new JLabel();
             this.gamesToPlayLabel = new JLabel();
             this.nOfPlayersLabel.setHorizontalAlignment(SwingConstants.CENTER);
             this.roundLabel.setHorizontalAlignment(SwingConstants.CENTER);
             this.gamesPlayedLabel.setHorizontalAlignment(SwingConstants.CENTER);
             this.thresholdLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            this.disasterProbabilityLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            this.uncertaintyParameterLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            this.disasterProbabilityLabel.setHorizontalAlignment(SwingConstants.CENTER);;
             this.gamesToPlayLabel.setHorizontalAlignment(SwingConstants.CENTER);
             panel.add(this.titlelabel);
             panel.add(this.nOfPlayersLabel);
@@ -241,7 +292,6 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             panel.add(this.gamesPlayedLabel);
             panel.add(this.thresholdLabel);
             panel.add(this.disasterProbabilityLabel);
-            panel.add(this.uncertaintyParameterLabel);
 
             this.updateUI();
         }
@@ -252,7 +302,6 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             this.gamesPlayedLabel.setText("Games Played: " + this.gamesPlayed);
             this.thresholdLabel.setText("Disaster threshold: " + this.threshold);
             this.disasterProbabilityLabel.setText("Disaster probability: " + this.disasterProbability);
-            this.uncertaintyParameterLabel.setText("Uncertainty parameter: " + this.uncertaintyParameter);
             this.gamesToPlayLabel.setText("Games to play: " + this.gamesToPlay);
         }
     }
@@ -263,9 +312,13 @@ public class PSI18_GUI extends JFrame implements ActionListener {
         final int playerID;
         AID aid;
         int remainigBudget;
+        int accumulatedReminder = 0;
+        TreeMap<Integer, ArrayList<Integer>> playHistory = new TreeMap<>();
+        int currentGame = 0;
         JLabel label1;
         JLabel label2;
         JLabel label3;
+
 
         Player (int playerId, int remainigBudget, AID aid) {
             this.playerID = playerId;
@@ -279,7 +332,7 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             playerPanel.setLayout(new GridLayout(3,1,20,20));
             this.label1 = new JLabel("Player " + playerId);
             this.label2 = new JLabel("Remaining budget: " + this.remainigBudget);
-            this.label3 = new JLabel("Last contribution: none");
+            this.label3 = new JLabel("Accumulated reminder: none");
             label1.setHorizontalAlignment(SwingConstants.CENTER);
             label2.setHorizontalAlignment(SwingConstants.CENTER);
             label3.setVerticalAlignment(SwingConstants.CENTER);
@@ -298,10 +351,44 @@ public class PSI18_GUI extends JFrame implements ActionListener {
 
         public String contribute(int amount){
             this.remainigBudget = remainigBudget - amount;
-
-            this.label2.setText("Remaining budget: " + this.remainigBudget);
-            this.label3.setText("Last contribution: " + amount);
+            addToHistory(amount);
+            updateUI();
             return "[PLAYER ACTION] : Player " + this.playerID + " contributed " + amount + "\n" ;
+        }
+
+        public void startGame(int budget) {
+            currentGame++;
+            this.playHistory.put(currentGame, new ArrayList<>());
+            this.remainigBudget = budget;
+            updateUI();
+        }
+
+        public void addToHistory(int contribution) {
+            ArrayList<Integer> play = playHistory.get(currentGame);
+            play.add(contribution);
+        }
+
+        public int getLastContribution(){
+            return playHistory.get(currentGame).get(playHistory.get(currentGame).size() - 1);
+        }
+
+        /**
+         * Saves the current budget to the score
+         */
+        public void accumulate(int contributions) {
+            if(contributions >= gameInfo.threshold){
+                this.accumulatedReminder += this.remainigBudget;
+                consoleLog("Player " + this.playerID + " gets " + this.remainigBudget + " points");
+            } else if(!gameInfo.disasterInThisRound) {
+                this.accumulatedReminder += this.remainigBudget;
+                consoleLog("Player " + this.playerID + " gets " + this.remainigBudget + " points");
+            }
+            updateUI();
+        }
+
+        private void updateUI() {
+            this.label2.setText("Remaining budget: " + this.remainigBudget);
+            this.label3.setText("Acumulated remainder: " + this.accumulatedReminder);
         }
     }
 

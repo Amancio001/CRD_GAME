@@ -63,7 +63,8 @@ public abstract class BaseAgent extends Agent {
             msg = receive();
             if (msg != null) {
                 System.out.println(getAID().getName() + " received " + msg.getContent() + " from " + msg.getSender().getName()); //DELETEME
-                //-------- Agent logic
+                // To be able to reset the player at any state
+                if(msg.getContent().startsWith("Id#")) state = State.s0_Configuring;
                 switch (state) {
                     case s0_Configuring:
                         //If INFORM Id#_#_,_,_,_ PROCESS SETUP --> go to state 1
@@ -83,10 +84,6 @@ public abstract class BaseAgent extends Agent {
                         }
                         break;
                     case s1_AwaitingGame:
-                        //If INFORM NEWGAME#_,_ PROCESS NEWGAME --> go to state 2
-                        //If INFORM Id#_#_,_,_,_ PROCESS SETUP --> stay at s1
-                        //Else ERROR
-                        //TODO I probably should check if the new game message comes from the main agent who sent the parameters
                         boolean parametersUpdated = false;
                         if (msg.getPerformative() == ACLMessage.INFORM) {
                             if (msg.getContent().startsWith("Id#")) { //Game settings updated

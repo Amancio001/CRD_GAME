@@ -11,6 +11,6 @@ public class RandomAgent extends BaseAgent {
     @Override
     public int playRound(int currentRound) {
         Random random = new Random();
-        return (random.nextInt(4));
+        return (random.nextInt(5));
     }
 }

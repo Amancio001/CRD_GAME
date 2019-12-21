@@ -15,31 +15,22 @@ public class MainAgent extends Agent {
 
     private PSI18_GUI gui;
     private ArrayList<PSI18_GUI.Player> players = new ArrayList<>();
-    private GameParametersStruct parameters = new GameParametersStruct();
+    public GameParametersStruct parameters = new GameParametersStruct();
+
+    public ArrayList<PSI18_GUI.Player> getPlayers() {
+        return players;
+    }
 
     @Override
     protected void setup() {
-        this.gui = new PSI18_GUI();
-        this.addBehaviour(new updateBehaviour(this, 5000));
-    }
-
-    public class updateBehaviour extends TickerBehaviour {
-
-        public updateBehaviour(Agent a, long period) {
-            super(a, period);
-        }
-
-        @Override
-        protected void onTick() {
-            updatePlayers();
-            this.getAgent().removeBehaviour(this);
-            newGame();
-        }
+        this.gui = new PSI18_GUI(this);
+        updatePlayers();
     }
 
     public int updatePlayers() {
             gui.resetPlayers();
-            gui.consoleLog("Updating player list");
+            players.clear();
+            System.out.println("Updating player list...");
             DFAgentDescription template = new DFAgentDescription();
             ServiceDescription sd = new ServiceDescription();
             sd.setType("Player");
@@ -47,7 +38,7 @@ public class MainAgent extends Agent {
             try {
                 DFAgentDescription[] result = DFService.search(this, template);
                 if (result.length > 0) {
-                    gui.consoleLog("Found " + result.length + " players");
+                    System.out.println("Found " + result.length + " players");
                 }
                 for (int i = 0; i < result.length; ++i) {
                     try {
@@ -57,15 +48,19 @@ public class MainAgent extends Agent {
                         if(player == null) System.out.print(" NULL PLAYER ");
                         players.add(player);
                     } catch (Exception e) {
-                        gui.consoleLog("Can't add new players, maximum reached");
+                        System.out.println("Can't add new players, maximum reached");
                         e.printStackTrace();
                     }
                 }
             } catch (FIPAException fe) {
-                gui.consoleLog(fe.getMessage());
+                System.out.println(fe.getMessage());
             }
+            gui.gameInfo.setPlayers(players.size());
+            gui.updatePlayerRemover();
+            gui.revalidate();
             return 0;
     }
+
     public void newGame(){
         GameBehaviour gameBehaviour = new GameBehaviour();
         this.addBehaviour(gameBehaviour);
@@ -81,7 +76,11 @@ public class MainAgent extends Agent {
 
         @Override
         public void action() {
+            parameters.N = players.size();
+            parameters.Pd = gui.gameInfo.disasterProbability;
+            parameters.numGames = gui.gameInfo.gamesToPlay;
             for (PSI18_GUI.Player player : players) {
+                player.accumulatedReminder = 0;
                 ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
                 msg.setContent("Id#" + player.playerID + "#" + parameters.N + "," + parameters.E + "," + parameters.R + "," + parameters.Pd + "," + parameters.numGames);
                 msg.addReceiver(player.aid);
@@ -91,62 +90,74 @@ public class MainAgent extends Agent {
         }
 
         private void playGame() {
+            while(gui.gameInfo.playRound()) {
             MainAgent agent = ((MainAgent) getAgent());
             ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
             StringBuilder content = new StringBuilder("NewGame#");
             for (PSI18_GUI.Player player : players) {
                 msg.addReceiver(player.aid);
                 content.append(player.playerID).append(",");
+                player.startGame(parameters.initialBudget);
             }
             content = new StringBuilder(content.substring(0, content.length() - 1));
             msg.setContent(content.toString());
             send(msg);
-            //for(int i = 0; i < agent.parameters.R; i++){
-                for (PSI18_GUI.Player player : players) {
-                    msg = new ACLMessage(ACLMessage.REQUEST);
-                    msg.setContent("Action");
-                    msg.addReceiver(player.aid);
-                    gui.consoleLog("Main Waiting for action of Player " + player.playerID);
+            int contributions = 0;
+                for (int i = 0; i < agent.parameters.R; i++) {
+                    for (PSI18_GUI.Player player : players) {
+                        msg = new ACLMessage(ACLMessage.REQUEST);
+                        msg.setContent("Action");
+                        msg.addReceiver(player.aid);
+                        System.out.println("Main Waiting for action of Player " + player.playerID);
+                        send(msg);
+                        msg = blockingReceive();
+                        int playerContribution = Integer.parseInt(msg.getContent().split("#")[1]);
+                        contributions += playerContribution;
+                        player.contribute(playerContribution);
+                        System.out.println("Main Received " + msg.getContent() + " from " + msg.getSender().getName());
+                        //                WakerBehaviour wake = new WakerBehaviour(this.getAgent(), 10000){ TODO
+                        //                    @Override
+                        //                    protected void onWake() {
+                        //                        super.onWake();
+                        //                        System.out.println("Timedout!");
+                        //                    }
+                        //                };
+                        //                class ReceiveBehaviour extends OneShotBehaviour {
+                        //                    @Override
+                        //                    public void action() {
+                        //                        ACLMessage response = receive();
+                        //                        if(response != null){
+                        //
+                        //                        } else block();
+                        //                    }
+                        //                }
+                    }
+                    msg = new ACLMessage(ACLMessage.INFORM);
+                    content = new StringBuilder("Results#");
+                    for (PSI18_GUI.Player player : players) {
+                        msg.addReceiver(player.aid);
+                        content.append(player.getLastContribution()).append(",");
+                    }
+                    content = new StringBuilder(content.substring(0, content.length() - 1));
+                    msg.setContent(content.toString());
                     send(msg);
-                    msg = blockingReceive();
-                    gui.consoleLog("Main Received " + msg.getContent() + " from " + msg.getSender().getName());
-//                WakerBehaviour wake = new WakerBehaviour(this.getAgent(), 10000){ TODO
-//                    @Override
-//                    protected void onWake() {
-//                        super.onWake();
-//                        System.out.println("Timedout!");
-//                    }
-//                };
-//                class ReceiveBehaviour extends OneShotBehaviour {
-//                    @Override
-//                    public void action() {
-//                        ACLMessage response = receive();
-//                        if(response != null){
-//
-//                        } else block();
-//                    }
-//                }
                 }
-                msg = new ACLMessage(ACLMessage.INFORM);
-                msg.setContent("Results#1#1"); //TODO
-                for (PSI18_GUI.Player player : players) {
-                    msg.addReceiver(player.aid);
-                }
-                send(msg);
-            //}
 
 
             msg = new ACLMessage(ACLMessage.INFORM);
             msg.setContent("GameOver"); //TODO
+            gui.gameInfo.checkDisaster(contributions);
             for (PSI18_GUI.Player player : players) {
                 msg.addReceiver(player.aid);
+                player.accumulate(contributions);
             }
             send(msg);
+            }
         }
 
         @Override
         public boolean done() {
-            return false;
+            return true;
         }
     }
 
@@ -159,10 +170,11 @@ public class MainAgent extends Agent {
         float Pd;
         int numGames;
         int currentRound;
+        int initialBudget = 40;
 
         public GameParametersStruct() {
             N = 5;
-            E = 4;
+            E = initialBudget;
             R = 10;
             Pd = 0.2f;
             numGames = 10;
