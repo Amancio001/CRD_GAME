@@ -8,15 +8,20 @@ import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.domain.FIPAException;
 import jade.lang.acl.ACLMessage;
 
-import java.util.Random;
-
 public abstract class BaseAgent extends Agent {
 
     private State state;
     private AID mainAgent;
-    private int myId;
-    private int[] opponentsIds;
     private ACLMessage msg;
+
+    public MainAgent.GameParametersStruct getParameters() {
+        return parameters;
+    }
+
+    public void setParameters(MainAgent.GameParametersStruct parameters) {
+        this.parameters = parameters;
+    }
+
     private MainAgent.GameParametersStruct parameters = new MainAgent.GameParametersStruct();
 
     protected void setup() {
@@ -77,19 +82,19 @@ public abstract class BaseAgent extends Agent {
                             } catch (NumberFormatException e) {
                                 System.out.println(getAID().getName() + ":" + state.name() + " - Bad message");
                             }
-                            if (parametersUpdated) state = State.s1_AwaitingGame;
-
+                            if (parametersUpdated){
+                                state = State.s1_AwaitingGame;
+                                onConfigurated();
+                            }
                         } else {
                             System.out.println(getAID().getName() + ":" + state.name() + " - Unexpected message");
                         }
                         break;
                     case s1_AwaitingGame:
-                        boolean parametersUpdated = false;
                         if (msg.getPerformative() == ACLMessage.INFORM) {
                             if (msg.getContent().startsWith("Id#")) { //Game settings updated
                                 try {
                                     parseSetupMessage(msg);
-                                    parametersUpdated = true;
                                 } catch (NumberFormatException e) {
                                     System.out.println(getAID().getName() + ":" + state.name() + " - Bad message");
                                 }
@@ -110,6 +115,7 @@ public abstract class BaseAgent extends Agent {
                             send(msg);
                             state = State.s3_AwaitingResult;
                         } else if(msg.getContent().startsWith("GameOver")){
+                            onRoundFinished();
                             state = State.s1_AwaitingGame;
                         } else {
                             System.out.println(getAID().getName() + ":" + state.name() + " - Unexpected message:" + msg.getContent());
@@ -117,6 +123,7 @@ public abstract class BaseAgent extends Agent {
                         break;
                     case s3_AwaitingResult:
                         if (msg.getPerformative() == ACLMessage.INFORM && msg.getContent().startsWith("Results#")) {
+                            onResult(msg.getContent());
                             System.out.println(getAID().getName() + ":" + state.name() + " " +  msg.getContent());
                             state = State.s2_InRound;
                         } else {
@@ -136,7 +143,6 @@ public abstract class BaseAgent extends Agent {
         private boolean parseSetupMessage(ACLMessage msg) throws NumberFormatException {
             BaseAgent agent = ((BaseAgent) this.getAgent());
             String[] parts = msg.getContent().split("#");
-            agent.myId = Integer.parseInt(parts[1]);
             parts = parts[2].split(",");
             if (parts.length != 5) throw new NumberFormatException();
             for (int i = 0; i < parts.length; i++) {
@@ -161,10 +167,22 @@ public abstract class BaseAgent extends Agent {
             return true;
         }
     }
+    /******** AGENT METHODS TO IMPLEMENT *******************/
 
     /**
+     * Agents MUST implement this method
+     *
      * Agents need to implement this method in order to make decisions along the rounds
       * @return An integer with the desired decision (between 0 and 4)
      */
     public abstract int playRound(int round);
+
+    /**
+     * Agents may override the following methods in order to do extra actions on certain events
+     */
+
+    public void onConfigurated(){}
+    public void onResult(String result){}
+    public void onRoundFinished(){}
+
 }

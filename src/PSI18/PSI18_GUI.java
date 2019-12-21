@@ -5,6 +5,7 @@ import jade.core.AID;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.TreeMap;
 import javax.swing.*;
@@ -21,6 +22,7 @@ public class PSI18_GUI extends JFrame implements ActionListener {
     private JMenuItem removePlayersItem;
     private int nOfPlayers = 0;
     private MainAgent mainAgent;
+    public boolean stop = false;
     public PSI18_GUI(MainAgent mainAgent) {
         super("Collective-Risk Dilemma Game (PSI 18)");
         this.mainAgent = mainAgent;
@@ -103,9 +105,16 @@ public class PSI18_GUI extends JFrame implements ActionListener {
         if(!this.verbose) return;
         this.console.append(message + "\n");
         console.setCaretPosition(console.getDocument().getLength());
-//        JScrollBar vertical = scroll.getVerticalScrollBar();
-//        scroll.setVerticalScrollBarPolicy(JScrollPane.);
         return;
+    }
+
+    public void consoleLog(String message, boolean important){
+        if(important){
+            this.console.append(message + "\n");
+            console.setCaretPosition(console.getDocument().getLength());
+            return;
+        }
+        else consoleLog(message);
     }
 
     public Player addPlayer(int playerID, int remainingBudget, AID aid) throws Exception{
@@ -126,14 +135,12 @@ public class PSI18_GUI extends JFrame implements ActionListener {
 
     public void updatePlayerRemover(){
         this.removePlayersItem.removeAll();
-        Iterator<PSI18_GUI.Player> players = mainAgent.getPlayers().iterator();
-        int i = 0;
+        Iterator<PSI18_GUI.Player> players = mainAgent.getPlayers().iterator();;
         while (players.hasNext()){
-            JMenuItem itemPlayer = new JMenuItem("Remove Player " + i);
+            Player player = players.next();
+            JMenuItem itemPlayer = new JMenuItem("Remove Player " + player.playerID);
             itemPlayer.addActionListener(this);
             this.removePlayersItem.add(itemPlayer);
-            players.next();
-            i++;
         }
     }
 
@@ -148,12 +155,21 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             }
             return;
         }
-        if(!this.verbose) return;
         this.console.append("[USER ACTION]: Selected *" + event + "* option\n");
         if(event.contains("Remove Player")){
-            int index = Integer.parseInt(event.split(" ")[2]);
-            mainAgent.getPlayers().remove(mainAgent.getPlayers().get(index));
-            players.remove(index);
+            int id = Integer.parseInt(event.split(" ")[2]);
+            Iterator<PSI18_GUI.Player> players = mainAgent.getPlayers().iterator();
+            Player playerToRemove = null;
+            while (players.hasNext()){
+                Player player = players.next();
+                if (player.playerID == id){
+                    playerToRemove = player;
+                }
+            }
+            this.players.remove(id);
+            mainAgent.removePlayer(playerToRemove);
+
+            this.updatePlayerRemover();
             this.revalidate();
         }
         switch(event) {
@@ -174,7 +190,18 @@ public class PSI18_GUI extends JFrame implements ActionListener {
                 break;
             case "New":
                 mainAgent.newGame();
+                break;
+            case "Stop":
+                 stop = true;
+                break;
+            case "Continue":
+                stop = false;
+                break;
         }
+    }
+
+    private synchronized void awakeAll() {
+        this.notifyAll();
     }
 
     public class GameInfo {
@@ -226,6 +253,7 @@ public class PSI18_GUI extends JFrame implements ActionListener {
             if(gamesToPlay == 0){
                 setGamesToPlay(gamesPlayed);
                 setGamesPlayed(0);
+                calculateResults();
                 return false;
             }
             setGamesToPlay(gamesToPlay - 1);
@@ -249,6 +277,34 @@ public class PSI18_GUI extends JFrame implements ActionListener {
                     consoleLog("And a disaster happened!");
                 }
             } else consoleLog("Threshold reached in round " + gameInfo.gamesPlayed + "!");
+        }
+
+        public void calculateResults() {
+            consoleLog("", true);
+            consoleLog("  [ RESULTS ]", true);
+            ArrayList<Player> players = mainAgent.getPlayers();
+            players.sort(new Comparator<Player>() {
+
+                @Override
+                public int compare(Player player, Player t1) {
+                    return -(Integer.valueOf(player.accumulatedReminder).compareTo(
+                            Integer.valueOf(t1.accumulatedReminder))
+                    );
+                }
+            });
+
+            Iterator<Player> i = players.iterator();
+            int lastPlace = 1;
+            int lastScore = -1;
+            int place = 0;
+            while(i.hasNext()){
+                Player player = i.next();
+                place++;
+                int playerPlace = (player.accumulatedReminder == lastScore) ? lastPlace : place;
+                lastPlace = playerPlace;
+                lastScore = player.accumulatedReminder;
+                consoleLog(playerPlace + "- Player " + player.playerID + " with " + player.accumulatedReminder + " points", true);
+            }
         }
 
 

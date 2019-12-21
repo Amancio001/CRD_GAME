@@ -23,11 +23,24 @@ public class MainAgent extends Agent {
 
     @Override
     protected void setup() {
-        this.gui = new PSI18_GUI(this);
-        updatePlayers();
+        MainAgent agent = this;
+        Runnable guiThread = () -> {
+            agent.setGui(new PSI18_GUI(agent));
+            updatePlayers();
+        };
+        guiThread.run();
+    }
+
+    public void setGui(PSI18_GUI gui) {
+        this.gui = gui;
+    }
+
+    public synchronized void removePlayer(PSI18_GUI.Player player){
+        players.remove(player);
     }
 
     public int updatePlayers() {
+            System.out.println(gui);
             gui.resetPlayers();
             players.clear();
             System.out.println("Updating player list...");
@@ -152,6 +165,17 @@ public class MainAgent extends Agent {
                 player.accumulate(contributions);
             }
             send(msg);
+            stop();
+            }
+        }
+
+        private void stop(){
+            while(gui.stop){
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         }
 
